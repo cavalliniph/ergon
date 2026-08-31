@@ -1,6 +1,6 @@
 package main
 
-import "arche/cmd"
+import "github.com/cavalliniph/arche/cmd"
 
 func main() {
 	cmd.Execute()
