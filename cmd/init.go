@@ -1,90 +1,124 @@
+/*
+Copyright © 2026 NAME HERE <EMAIL ADDRESS>
+*/
 package cmd
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
 
-	projecttemplates "github.com/cavalliniph/arche/templates"
 	"github.com/spf13/cobra"
+
+	tea "charm.land/bubbletea/v2"
 )
 
+type model struct {
+	choices []string
+	cursor int
+	selected string
+}
+
+func initialModel() model {
+	return model{
+		choices: []string{
+			"[Backend] Python + Flask",
+			"[Frontend] React + Vite",
+			"[Mobile] React Native",
+		},
+	}
+}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+
+	case tea.KeyPressMsg:
+
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return m, tea.Quit
+
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+
+		case "down", "j":
+			if m.cursor < len(m.choices) -1 {
+				m.cursor++
+			}
+
+		case "enter", "space":
+			m.selected = m.choices[m.cursor]
+			return m, tea.Quit
+		}
+	}
+
+	return m, nil
+}
+
+func (m model) View() tea.View {
+	s := "Escolha seu tipo de projeto\n\n"
+
+	for i, choice := range m.choices {
+		cursor := " "
+		if m.cursor == i {
+			cursor = ">"
+		}
+
+		checked := " "
+		if m.selected == choice {
+			checked = "x"
+		}
+
+		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
+	}
+
+	s += "\nPressione q para sair.\n"
+
+	return tea.NewView(s)
+}
+
+// initCmd represents the init command
 var initCmd = &cobra.Command{
-	Use:   "init <project-directory>",
-	Short: "Create a project from a template",
-	Args:  cobra.ExactArgs(1),
+	Use:   "init",
+	Short: "A brief description of your command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		templateName, err := cmd.Flags().GetString("template")
+		p := tea.NewProgram(initialModel())
+		finalModel, err := p.Run()
+
 		if err != nil {
-			return err
+			fmt.Printf("um erro ocorreu: %v", err)
+			os.Exit(1)
 		}
 
-		if err := createProject(args[0], templateName); err != nil {
-			return err
-		}
-
-		fmt.Fprintf(cmd.OutOrStdout(), "Project created at %s\n", args[0])
+		result := finalModel.(model)
+		
+		fmt.Printf("chosen > %v\n", result.selected)
+		
 		return nil
 	},
 }
 
 func init() {
-	initCmd.Flags().StringP("template", "t", "flask", "project template")
 	rootCmd.AddCommand(initCmd)
-}
 
-func createProject(destination, templateName string) error {
-	if templateName != "flask" {
-		return fmt.Errorf("unknown template %q (available: flask)", templateName)
-	}
+	// Here you will define your flags and configuration settings.
 
-	if _, err := os.Stat(destination); err == nil {
-		return fmt.Errorf("destination %q already exists", destination)
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("inspect destination %q: %w", destination, err)
-	}
+	// Cobra supports Persistent Flags which will work for this command
+	// and all subcommands, e.g.:
+	// initCmd.PersistentFlags().String("foo", "", "A help for foo")
 
-	templateRoot, err := fs.Sub(projecttemplates.Files, templateName)
-	if err != nil {
-		return fmt.Errorf("open template %q: %w", templateName, err)
-	}
-
-	if err := os.MkdirAll(destination, 0o755); err != nil {
-		return fmt.Errorf("create destination %q: %w", destination, err)
-	}
-
-	copySucceeded := false
-	defer func() {
-		if !copySucceeded {
-			_ = os.RemoveAll(destination)
-		}
-	}()
-
-	err = fs.WalkDir(templateRoot, ".", func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-
-		target := destination
-		if path != "." {
-			target = filepath.Join(destination, filepath.FromSlash(path))
-		}
-
-		if entry.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-
-		data, err := fs.ReadFile(templateRoot, path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, 0o644)
-	})
-	if err != nil {
-		return fmt.Errorf("copy template %q: %w", templateName, err)
-	}
-
-	copySucceeded = true
-	return nil
+	// Cobra supports local flags which will only run when this command
+	// is called directly, e.g.:
+	// initCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
